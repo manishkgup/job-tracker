@@ -113,6 +113,7 @@ function openModal(job = null) {
   document.getElementById('job-form').reset();
   document.getElementById('modal-title').textContent = job ? 'Edit Application' : 'Add Application';
   document.getElementById('save-btn').textContent    = job ? 'Update' : 'Save';
+  document.getElementById('save-btn').disabled       = false;
   document.getElementById('job-id').value            = job ? job.id : '';
 
   if (job) {
