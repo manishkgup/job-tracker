@@ -71,8 +71,20 @@
           <option value="Rejected">Rejected</option>
           <option value="Withdrawn">Withdrawn</option>
         </select>
+        <select id="source-filter" onchange="filterJobs()">
+          <option value="">All Sources</option>
+          <option value="Manual">Manual</option>
+          <option value="LinkedIn">LinkedIn</option>
+          <option value="Indeed">Indeed</option>
+          <option value="Glassdoor">Glassdoor</option>
+          <option value="Company Website">Company Website</option>
+          <option value="Other">Other</option>
+        </select>
       </div>
-      <button class="btn btn-primary" onclick="openModal()">+ Add Application</button>
+      <div class="controls-right">
+        <button class="btn btn-outline" onclick="openImportModal()">&#8593; Import LinkedIn CSV</button>
+        <button class="btn btn-primary" onclick="openModal()">+ Add Application</button>
+      </div>
     </div>
 
     <div class="table-wrapper">
@@ -82,6 +94,7 @@
             <th>Company</th>
             <th>Position</th>
             <th>Status</th>
+            <th>Source</th>
             <th>Location</th>
             <th>Applied</th>
             <th>Salary</th>
@@ -90,7 +103,7 @@
         </thead>
         <tbody id="jobs-tbody">
           <tr>
-            <td colspan="7" class="empty-state">No applications yet. Click &ldquo;+ Add Application&rdquo; to get started.</td>
+            <td colspan="8" class="empty-state">No applications yet. Click &ldquo;+ Add Application&rdquo; to get started.</td>
           </tr>
         </tbody>
       </table>
@@ -140,6 +153,17 @@
             <label for="salary_range">Salary Range</label>
             <input type="text" id="salary_range" placeholder="$80k – $120k">
           </div>
+          <div class="form-group">
+            <label for="source">Source</label>
+            <select id="source">
+              <option value="Manual">Manual</option>
+              <option value="LinkedIn">LinkedIn</option>
+              <option value="Indeed">Indeed</option>
+              <option value="Glassdoor">Glassdoor</option>
+              <option value="Company Website">Company Website</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
           <div class="form-group form-group-full">
             <label for="job_url">Job Posting URL</label>
             <input type="url" id="job_url" placeholder="https://company.com/jobs/...">
@@ -154,6 +178,64 @@
           <button type="submit" class="btn btn-primary" id="save-btn">Save</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- LinkedIn CSV Import Modal -->
+  <div id="import-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+    <div class="modal-overlay" onclick="closeImportModal()"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="import-modal-title">Import from LinkedIn CSV</h2>
+        <button class="close-btn" onclick="closeImportModal()" aria-label="Close">&times;</button>
+      </div>
+
+      <div style="padding: 20px 24px;">
+
+        <!-- Instructions -->
+        <div class="import-instructions">
+          <p class="import-instructions-title">How to export your applications from LinkedIn:</p>
+          <ol>
+            <li>Go to <strong>LinkedIn → Settings &amp; Privacy</strong></li>
+            <li>Click <strong>Data Privacy → Get a copy of your data</strong></li>
+            <li>Select <strong>&ldquo;Job applications&rdquo;</strong> and click Request archive</li>
+            <li>LinkedIn emails you a link — download the ZIP file</li>
+            <li>Extract it and upload <strong>Job Applications.csv</strong> below</li>
+          </ol>
+        </div>
+
+        <!-- Drop zone -->
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('csv-file').click()">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--gray-400)">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p>Drop <strong>Job Applications.csv</strong> here or click to browse</p>
+          <input type="file" id="csv-file" accept=".csv" style="display:none" onchange="handleCSVFile(this.files[0])">
+        </div>
+
+        <!-- Preview -->
+        <div id="import-preview" class="hidden">
+          <p class="import-preview-count">Found <strong id="preview-count">0</strong> applications ready to import</p>
+          <div class="import-preview-table-wrapper">
+            <table class="import-preview-table">
+              <thead>
+                <tr><th>Company</th><th>Position</th><th>Date Applied</th><th>Source</th></tr>
+              </thead>
+              <tbody id="preview-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div id="import-error" class="error-msg" style="margin-top:12px"></div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeImportModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="import-btn" onclick="importJobs()" disabled>Import</button>
+      </div>
     </div>
   </div>
 

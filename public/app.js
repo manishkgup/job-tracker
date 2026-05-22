@@ -4,6 +4,7 @@ if (!localStorage.getItem('token')) {
 }
 
 let allJobs = [];
+let parsedImportJobs = [];   // holds CSV rows waiting to be imported
 
 // ── API helper ───────────────────────────────────────────
 async function api(method, path, body = null) {
@@ -28,6 +29,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('username-display').textContent =
     localStorage.getItem('username') || 'User';
   await loadJobs();
+
+  // Drag-and-drop on the import drop zone
+  const zone = document.getElementById('drop-zone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleCSVFile(file);
+  });
 });
 
 // ── Load & render ─────────────────────────────────────────
@@ -40,12 +52,12 @@ async function loadJobs() {
 }
 
 function updateStats(jobs) {
-  document.getElementById('stat-total').textContent    = jobs.length;
-  document.getElementById('stat-applied').textContent  = jobs.filter(j => j.status === 'Applied').length;
+  document.getElementById('stat-total').textContent     = jobs.length;
+  document.getElementById('stat-applied').textContent   = jobs.filter(j => j.status === 'Applied').length;
   document.getElementById('stat-interview').textContent =
     jobs.filter(j => ['Phone Screen', 'Interview', 'Technical'].includes(j.status)).length;
-  document.getElementById('stat-offer').textContent    = jobs.filter(j => j.status === 'Offer').length;
-  document.getElementById('stat-rejected').textContent = jobs.filter(j => j.status === 'Rejected').length;
+  document.getElementById('stat-offer').textContent     = jobs.filter(j => j.status === 'Offer').length;
+  document.getElementById('stat-rejected').textContent  = jobs.filter(j => j.status === 'Rejected').length;
 }
 
 const STATUS_CLASS = {
@@ -58,46 +70,59 @@ const STATUS_CLASS = {
   'Withdrawn':    'status-Withdrawn',
 };
 
+const SOURCE_CLASS = {
+  'LinkedIn':        'source-LinkedIn',
+  'Indeed':          'source-Indeed',
+  'Glassdoor':       'source-Glassdoor',
+  'Company Website': 'source-CompanyWebsite',
+  'Manual':          'source-Manual',
+  'Other':           'source-Other',
+};
+
 function renderJobs(jobs) {
   const tbody = document.getElementById('jobs-tbody');
 
   if (jobs.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="7" class="empty-state">No applications match your filters.</td></tr>';
+      '<tr><td colspan="8" class="empty-state">No applications match your filters.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = jobs.map(job => `
-    <tr>
-      <td><span class="company-name">${esc(job.company)}</span></td>
-      <td>${esc(job.position)}</td>
-      <td>
-        <span class="status-badge ${STATUS_CLASS[job.status] || ''}">${esc(job.status)}</span>
-      </td>
-      <td>${job.location    ? esc(job.location)    : '<span style="color:var(--gray-400)">—</span>'}</td>
-      <td>${job.date_applied ? esc(job.date_applied) : '<span style="color:var(--gray-400)">—</span>'}</td>
-      <td>${job.salary_range ? esc(job.salary_range) : '<span style="color:var(--gray-400)">—</span>'}</td>
-      <td class="actions-cell">
-        ${job.job_url
-          ? `<a href="${esc(job.job_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline">Link</a>`
-          : ''}
-        <button class="btn btn-sm btn-outline" onclick="editJob(${job.id})">Edit</button>
-        <button class="btn btn-sm btn-danger"  onclick="deleteJob(${job.id})">Delete</button>
-      </td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = jobs.map(job => {
+    const src = job.source || 'Manual';
+    return `
+      <tr>
+        <td><span class="company-name">${esc(job.company)}</span></td>
+        <td>${esc(job.position)}</td>
+        <td><span class="status-badge ${STATUS_CLASS[job.status] || ''}">${esc(job.status)}</span></td>
+        <td><span class="source-badge ${SOURCE_CLASS[src] || 'source-Other'}">${esc(src)}</span></td>
+        <td>${job.location     ? esc(job.location)     : '<span style="color:var(--gray-400)">—</span>'}</td>
+        <td>${job.date_applied ? esc(job.date_applied) : '<span style="color:var(--gray-400)">—</span>'}</td>
+        <td>${job.salary_range ? esc(job.salary_range) : '<span style="color:var(--gray-400)">—</span>'}</td>
+        <td class="actions-cell">
+          ${job.job_url
+            ? `<a href="${esc(job.job_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline">Link</a>`
+            : ''}
+          <button class="btn btn-sm btn-outline" onclick="editJob(${job.id})">Edit</button>
+          <button class="btn btn-sm btn-danger"  onclick="deleteJob(${job.id})">Delete</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ── Filter ────────────────────────────────────────────────
 function filterJobs() {
   const query  = document.getElementById('search-input').value.toLowerCase();
   const status = document.getElementById('status-filter').value;
+  const source = document.getElementById('source-filter').value;
 
   const filtered = allJobs.filter(j => {
     const matchSearch = !query  || j.company.toLowerCase().includes(query) ||
                                    j.position.toLowerCase().includes(query);
     const matchStatus = !status || j.status === status;
-    return matchSearch && matchStatus;
+    const matchSource = !source || (j.source || 'Manual') === source;
+    return matchSearch && matchStatus && matchSource;
   });
 
   renderJobs(filtered);
@@ -108,7 +133,7 @@ function filterByStatus(status) {
   filterJobs();
 }
 
-// ── Modal ─────────────────────────────────────────────────
+// ── Add/Edit Modal ────────────────────────────────────────
 function openModal(job = null) {
   document.getElementById('job-form').reset();
   document.getElementById('modal-title').textContent = job ? 'Edit Application' : 'Add Application';
@@ -125,6 +150,7 @@ function openModal(job = null) {
     document.getElementById('salary_range').value = job.salary_range || '';
     document.getElementById('job_url').value      = job.job_url      || '';
     document.getElementById('notes').value        = job.notes        || '';
+    document.getElementById('source').value       = job.source       || 'Manual';
   }
 
   document.getElementById('job-modal').classList.remove('hidden');
@@ -135,9 +161,8 @@ function closeModal() {
   document.getElementById('job-modal').classList.add('hidden');
 }
 
-// Close on Escape
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') { closeModal(); closeImportModal(); }
 });
 
 // ── Save (add or update) ──────────────────────────────────
@@ -154,10 +179,11 @@ async function saveJob(e) {
     salary_range: document.getElementById('salary_range').value.trim() || null,
     job_url:      document.getElementById('job_url').value.trim()      || null,
     notes:        document.getElementById('notes').value.trim()        || null,
+    source:       document.getElementById('source').value,
   };
 
   const btn = document.getElementById('save-btn');
-  btn.disabled = true;
+  btn.disabled    = true;
   btn.textContent = 'Saving…';
 
   await api(id ? 'PUT' : 'POST', id ? `/jobs/${id}` : '/jobs', body);
@@ -183,6 +209,184 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('username');
   window.location.href = '/';
+}
+
+// ═══════════════════════════════════════════════════════════
+// LINKEDIN CSV IMPORT
+// ═══════════════════════════════════════════════════════════
+
+function openImportModal() {
+  // Reset state
+  parsedImportJobs = [];
+  document.getElementById('import-preview').classList.add('hidden');
+  document.getElementById('import-error').textContent = '';
+  document.getElementById('import-btn').disabled      = true;
+  document.getElementById('csv-file').value           = '';
+  document.getElementById('drop-zone').classList.remove('drag-over');
+
+  document.getElementById('import-modal').classList.remove('hidden');
+}
+
+function closeImportModal() {
+  document.getElementById('import-modal').classList.add('hidden');
+}
+
+// Called when a file is selected or dropped
+function handleCSVFile(file) {
+  const errEl = document.getElementById('import-error');
+  errEl.textContent = '';
+
+  if (!file || !file.name.endsWith('.csv')) {
+    errEl.textContent = 'Please select a .csv file.';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      parsedImportJobs = parseLinkedInCSV(e.target.result);
+
+      if (parsedImportJobs.length === 0) {
+        errEl.textContent =
+          'No valid rows found. Make sure this is the LinkedIn "Job Applications.csv" file.';
+        return;
+      }
+
+      showImportPreview(parsedImportJobs);
+    } catch (err) {
+      errEl.textContent = 'Could not parse CSV: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showImportPreview(jobs) {
+  document.getElementById('preview-count').textContent = jobs.length;
+
+  // Show first 5 rows as a preview
+  const preview = jobs.slice(0, 5);
+  document.getElementById('preview-tbody').innerHTML = preview.map(j => `
+    <tr>
+      <td>${esc(j.company)}</td>
+      <td>${esc(j.position)}</td>
+      <td>${j.date_applied || '—'}</td>
+      <td><span class="source-badge source-LinkedIn">LinkedIn</span></td>
+    </tr>
+  `).join('');
+
+  if (jobs.length > 5) {
+    document.getElementById('preview-tbody').innerHTML +=
+      `<tr><td colspan="4" style="color:var(--gray-400);text-align:center;padding:8px">
+        … and ${jobs.length - 5} more
+      </td></tr>`;
+  }
+
+  document.getElementById('import-preview').classList.remove('hidden');
+  document.getElementById('import-btn').disabled = false;
+  document.getElementById('import-btn').textContent = `Import ${jobs.length} Applications`;
+}
+
+async function importJobs() {
+  const btn = document.getElementById('import-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Importing…';
+
+  const result = await api('POST', '/jobs/import', { jobs: parsedImportJobs });
+
+  if (!result) return;                         // 401 — logout already called
+
+  closeImportModal();
+  await loadJobs();
+  alert(`Successfully imported ${result.imported} application${result.imported !== 1 ? 's' : ''}!`);
+}
+
+// ── CSV parser ────────────────────────────────────────────
+// Handles LinkedIn's "Job Applications.csv" export format.
+// Flexible column matching so it works even if LinkedIn changes headers.
+
+function parseLinkedInCSV(text) {
+  // Normalise Windows line endings
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n');
+  if (lines.length < 2) return [];
+
+  const headers = parseCSVRow(lines[0]).map(h => h.toLowerCase().trim());
+
+  // Find column index by trying multiple possible header names
+  const col = (...names) => {
+    for (const name of names) {
+      const i = headers.findIndex(h => h.includes(name));
+      if (i !== -1) return i;
+    }
+    return -1;
+  };
+
+  const companyIdx  = col('company');
+  const titleIdx    = col('job title', 'position', 'title', 'role');
+  const dateIdx     = col('application date', 'date applied', 'applied date', 'applied');
+  const urlIdx      = col('job url', 'url', 'link', 'posting');
+  const statusIdx   = col('status');
+
+  if (companyIdx === -1 || titleIdx === -1) {
+    throw new Error(
+      'Could not find "Company" or "Job Title" columns. ' +
+      'Please use the file exported from LinkedIn → Settings → Get a copy of your data.'
+    );
+  }
+
+  const jobs = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+
+    const cols    = parseCSVRow(lines[i]);
+    const company = cols[companyIdx]?.trim();
+    const position = cols[titleIdx]?.trim();
+    if (!company || !position) continue;
+
+    // LinkedIn dates come as "2024-01-15 10:30:00 UTC" — extract YYYY-MM-DD
+    let dateApplied = null;
+    if (dateIdx !== -1 && cols[dateIdx]) {
+      const m = cols[dateIdx].trim().match(/(\d{4}-\d{2}-\d{2})/);
+      if (m) dateApplied = m[1];
+    }
+
+    jobs.push({
+      company,
+      position,
+      status:       statusIdx !== -1 ? (cols[statusIdx]?.trim() || 'Applied') : 'Applied',
+      date_applied: dateApplied,
+      job_url:      urlIdx !== -1    ? (cols[urlIdx]?.trim()    || null)       : null,
+      source:       'LinkedIn',
+    });
+  }
+
+  return jobs;
+}
+
+// Proper CSV row parser — handles quoted fields and escaped quotes
+function parseCSVRow(line) {
+  const result = [];
+  let current  = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';   // escaped quote ""
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
 }
 
 // ── XSS protection ───────────────────────────────────────

@@ -32,4 +32,11 @@ db.exec(`
   );
 `);
 
+// Migration: add source column to existing databases
+try {
+  db.exec("ALTER TABLE jobs ADD COLUMN source TEXT DEFAULT 'Manual'");
+} catch {
+  // Column already exists — safe to ignore
+}
+
 module.exports = db;
