@@ -7,8 +7,9 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/jobs', require('./routes/jobs'));
+app.use('/api/auth',   require('./routes/auth'));
+app.use('/api/jobs',   require('./routes/jobs'));
+app.use('/api/resume', require('./routes/resume'));
 
 // Fallback — serve index.html for any unknown route (SPA pattern)
 app.get('*', (req, res) => {

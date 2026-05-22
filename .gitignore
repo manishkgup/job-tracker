@@ -3,3 +3,4 @@ jobs.db
 .env
 *.db-shm
 *.db-wal
+uploads/resumes/*.docx

@@ -28,7 +28,7 @@ async function api(method, path, body = null) {
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('username-display').textContent =
     localStorage.getItem('username') || 'User';
-  await loadJobs();
+  await Promise.all([loadJobs(), loadResume()]);
 
   // Drag-and-drop on the import drop zone
   const zone = document.getElementById('drop-zone');
@@ -209,6 +209,128 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('username');
   window.location.href = '/';
+}
+
+// ═══════════════════════════════════════════════════════════
+// RESUME MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+
+let currentResume  = null;   // metadata from last GET /api/resume
+let pendingResume  = null;   // file waiting for replace-confirmation
+
+async function loadResume() {
+  const data = await api('GET', '/resume');
+  if (data) renderResume(data);
+}
+
+function renderResume(data) {
+  currentResume = data.exists ? data : null;
+  pendingResume = null;
+
+  const meta    = document.getElementById('resume-meta');
+  const dlBtn   = document.getElementById('resume-download-btn');
+  const upBtn   = document.getElementById('resume-upload-btn');
+  const delBtn  = document.getElementById('resume-delete-btn');
+  const warning = document.getElementById('resume-warning');
+  const errEl   = document.getElementById('resume-error');
+
+  warning.classList.add('hidden');
+  errEl.textContent = '';
+  upBtn.disabled    = false;
+
+  if (data.exists) {
+    const date = new Date(data.uploaded_at).toLocaleDateString('en-US',
+      { year: 'numeric', month: 'short', day: 'numeric' });
+    meta.innerHTML =
+      `<strong>${esc(data.original_name)}</strong> &middot; Uploaded ${date}`;
+    dlBtn.classList.remove('hidden');
+    upBtn.textContent = '&#8593; Replace';
+    delBtn.classList.remove('hidden');
+  } else {
+    meta.textContent = 'No resume uploaded yet.';
+    dlBtn.classList.add('hidden');
+    upBtn.innerHTML  = '&#8593; Upload Resume';
+    delBtn.classList.add('hidden');
+  }
+}
+
+// Called when the file input changes (user picked a file)
+function handleResumeSelect(input) {
+  const file = input.files[0];
+  input.value = '';                 // reset so the same file can be re-selected later
+  if (!file) return;
+
+  document.getElementById('resume-error').textContent = '';
+
+  if (currentResume) {
+    // A resume already exists — show the replacement warning first
+    pendingResume = file;
+    document.getElementById('resume-warning-name').textContent = currentResume.original_name;
+    document.getElementById('resume-warning').classList.remove('hidden');
+  } else {
+    // No existing resume — upload straight away
+    uploadResume(file);
+  }
+}
+
+function confirmResumeReplace() {
+  if (pendingResume) uploadResume(pendingResume);
+}
+
+function cancelResumeReplace() {
+  pendingResume = null;
+  document.getElementById('resume-warning').classList.add('hidden');
+}
+
+async function uploadResume(file) {
+  const upBtn = document.getElementById('resume-upload-btn');
+  upBtn.disabled    = true;
+  upBtn.textContent = 'Uploading…';
+  document.getElementById('resume-warning').classList.add('hidden');
+
+  const formData = new FormData();
+  formData.append('resume', file);
+
+  const res = await fetch('/api/resume', {
+    method:  'POST',
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+    body:    formData,
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    document.getElementById('resume-error').textContent = data.error || 'Upload failed.';
+    upBtn.disabled    = false;
+    upBtn.textContent = currentResume ? '&#8593; Replace' : '&#8593; Upload Resume';
+    return;
+  }
+
+  renderResume(data);
+}
+
+async function downloadResume() {
+  const filename = currentResume?.original_name || 'resume.docx';
+
+  const res = await fetch('/api/resume/download', {
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+  });
+
+  if (!res.ok) { alert('Download failed.'); return; }
+
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function deleteResume() {
+  if (!confirm(`Permanently delete "${currentResume?.original_name}"? This cannot be undone.`)) return;
+  await api('DELETE', '/resume');
+  renderResume({ exists: false });
 }
 
 // ═══════════════════════════════════════════════════════════

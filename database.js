@@ -32,6 +32,16 @@ db.exec(`
   );
 `);
 
+// Resumes table — one row per user
+db.exec(`
+  CREATE TABLE IF NOT EXISTS resumes (
+    user_id       INTEGER PRIMARY KEY,
+    original_name TEXT    NOT NULL,
+    uploaded_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
 // Migration: add source column to existing databases
 try {
   db.exec("ALTER TABLE jobs ADD COLUMN source TEXT DEFAULT 'Manual'");
