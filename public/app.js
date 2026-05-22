@@ -1,5 +1,7 @@
 // ── Auth guard ──────────────────────────────────────────
-if (!localStorage.getItem('token')) {
+// Username in localStorage is just a display hint — the real auth
+// gate is the HttpOnly cookie checked server-side on every API call.
+if (!localStorage.getItem('username')) {
   window.location.href = '/';
 }
 
@@ -10,10 +12,8 @@ let parsedImportJobs = [];   // holds CSV rows waiting to be imported
 async function api(method, path, body = null) {
   const opts = {
     method,
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers:     { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',   // sends the HttpOnly cookie automatically
   };
   if (body) opts.body = JSON.stringify(body);
 
@@ -205,8 +205,8 @@ async function deleteJob(id) {
 }
 
 // ── Auth ──────────────────────────────────────────────────
-function logout() {
-  localStorage.removeItem('token');
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
   localStorage.removeItem('username');
   window.location.href = '/';
 }
@@ -292,9 +292,9 @@ async function uploadResume(file) {
   formData.append('resume', file);
 
   const res = await fetch('/api/resume', {
-    method:  'POST',
-    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-    body:    formData,
+    method:      'POST',
+    credentials: 'same-origin',   // cookie sent automatically
+    body:        formData,
   });
 
   const data = await res.json();
@@ -313,7 +313,7 @@ async function downloadResume() {
   const filename = currentResume?.original_name || 'resume.docx';
 
   const res = await fetch('/api/resume/download', {
-    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+    credentials: 'same-origin',   // cookie sent automatically
   });
 
   if (!res.ok) { alert('Download failed.'); return; }

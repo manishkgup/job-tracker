@@ -1,5 +1,6 @@
-// Redirect if already logged in
-if (localStorage.getItem('token')) {
+// If we have a stored username, try the dashboard — server will redirect back
+// if the session cookie has expired (401 → logout() in app.js).
+if (localStorage.getItem('username')) {
   window.location.href = '/dashboard.html';
 }
 
@@ -20,15 +21,17 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
   try {
     const res  = await fetch('/api/auth/login', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, password }),
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',   // ensure cookie is accepted
+      body:        JSON.stringify({ email, password }),
     });
     const data = await res.json();
 
     if (!res.ok) { errEl.textContent = data.error; return; }
 
-    localStorage.setItem('token',    data.token);
+    // Token is now in an HttpOnly cookie set by the server — we never touch it.
+    // Only store the display name.
     localStorage.setItem('username', data.username);
     window.location.href = '/dashboard.html';
   } catch {
@@ -47,15 +50,15 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
 
   try {
     const res  = await fetch('/api/auth/register', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ username, email, password }),
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body:        JSON.stringify({ username, email, password }),
     });
     const data = await res.json();
 
     if (!res.ok) { errEl.textContent = data.error; return; }
 
-    localStorage.setItem('token',    data.token);
     localStorage.setItem('username', data.username);
     window.location.href = '/dashboard.html';
   } catch {
